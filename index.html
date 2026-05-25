@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>異次元クッキークリッカー風ゲーム</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: #1e110a;
+            color: white;
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            user-select: none;
+            overflow: hidden;
+            transition: background 0.3s;
+        }
+        body.fever-mode { background-color: #4a0d0d; }
+        #left-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-right: 4px solid #140a05;
+            background: radial-gradient(circle, #442a18 0%, #1e110a 100%);
+            position: relative;
+        }
+        body.fever-mode #left-panel { background: radial-gradient(circle, #8a1f1f 0%, #4a0d0d 100%); }
+        #fever-overlay {
+            position: absolute; top: 20px; font-size: 24px; font-weight: bold; color: #ff3333;
+            background: rgba(255, 255, 255, 0.9); padding: 8px 20px; border-radius: 10px;
+            box-shadow: 0 0 20px #ff3333; display: none; animation: pulse 0.5s infinite alternate; z-index: 10;
+        }
+        @keyframes pulse { 0% { transform: scale(1); } 100% { transform: scale(1.05); } }
+        #cookie-count { font-size: 38px; font-weight: bold; margin-bottom: 5px; text-shadow: 0 0 10px rgba(0,0,0,0.5); }
+        #cpc-count { font-size: 16px; color: #ffb84d; margin-bottom: 5px; }
+        #cps-count { font-size: 20px; color: #ccc; margin-bottom: 30px; }
+        #cookie { font-size: 160px; cursor: pointer; transition: transform 0.05s; display: inline-block; }
+        #cookie.active { transform: scale(0.9); }
+        #key-notice { margin-top: 15px; font-size: 13px; color: #aaa; background: rgba(0,0,0,0.3); padding: 5px 15px; border-radius: 20px; }
+        #system-buttons { position: absolute; bottom: 20px; display: flex; gap: 10px; }
+        .sys-btn { background-color: #140a05; color: #ccc; border: 1px solid #442a18; padding: 5px 15px; cursor: pointer; border-radius: 5px; font-size: 12px; }
+        .sys-btn:hover { color: white; background-color: #d9534f; }
+        #golden-cookie { position: absolute; font-size: 50px; cursor: pointer; display: none; z-index: 100; animation: float-anim 1s ease-in-out infinite alternate; filter: drop-shadow(0 0 15px #ffd700); }
+        @keyframes float-anim { 0% { transform: translateY(0px) rotate(0deg); } 100% { transform: translateY(-10px) rotate(10deg); } }
+        #right-panel { width: 440px; background-color: #25140b; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; }
+        h2 { border-bottom: 2px solid #442a18; padding-bottom: 10px; margin: 0; color: #ffd700; }
+        #upgrade-container { display: flex; flex-wrap: wrap; gap: 8px; background-color: #140a05; padding: 10px; border-radius: 8px; min-height: 50px; }
+        .upgrade-icon { font-size: 24px; width: 44px; height: 44px; background-color: #382012; border: 2px solid #442a18; border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative; }
+        .upgrade-icon:hover { background-color: #442a18; }
+        .upgrade-icon.disabled { opacity: 0.3; cursor: not-allowed; }
+        .upgrade-icon:hover .tooltip { display: block; }
+        .tooltip { display: none; position: absolute; bottom: 50px; right: 0; background-color: #111; color: #fff; padding: 8px; border-radius: 4px; font-size: 12px; width: 200px; z-index: 10; box-shadow: 0 4px 8px rgba(0,0,0,0.5); border: 1px solid #442a18; }
+        .shop-item { background-color: #382012; border: 2px solid #442a18; border-radius: 8px; padding: 12px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+        .shop-item:hover { background-color: #442a18; }
+        .shop-item.disabled { opacity: 0.4; cursor: not-allowed; background-color: #140a05; }
+        .item-info div { font-weight: bold; font-size: 16px; }
+        .item-info span { font-size: 12px; color: #ccc; }
+        .item-cost { font-size: 16px; font-weight: bold; color: #ffd700; }
+        .item-count { font-size: 20px; font-weight: bold; color: #a8ffb2; margin-left: 10px; }
+    </style>
+</head>
+<body>
+
+<div id="left-panel">
+    <div id="fever-overlay">🔥 フィーバータイム！ 7倍ブースト中!! (<span id="fever-timer">15</span>秒)</div>
+    <div id="golden-cookie" onclick="clickGoldenCookie()">🌟</div>
+    <div id="cookie-count"><span id="cookies">0</span> 枚</div>
+    <div id="cpc-count">1クリック: +<span id="cpc">1</span> 枚</div>
+    <div id="cps-count">毎秒: <span id="cps">0.0</span> 枚</div>
+    <div id="cookie" onclick="clickCookie()">🍪</div>
+    <div id="key-notice">⌨️ スペースキー連打でも生産可能！</div>
+    <div id="system-buttons"><button class="sys-btn" onclick="resetGame()">データをリセット</button></div>
+</div>
+
+<div id="right-panel">
+    <div>
+        <h2>研究開発（アップグレード）</h2>
+        <p style="font-size: 12px; color: #ccc; margin: 5px 0;">※購入すると永続効果を発揮します。</p>
+        <div id="upgrade-container"></div>
+    </div>
+    <div>
+        <h2>施設（自動生産）</h2>
+        <div id="shop-container" style="margin-top: 10px;"></div>
+    </div>
+</div>
+
+<script>
+    let cookies = 0;
+    let baseClickPower = 1;
+    let feverTimeLeft = 0; 
+    let isFever = false;
+
+    let gameState = { cookies: 0, items: {}, upgrades: {} };
+
+    const itemsConfig = {
+        cursor:   { name: "👆 カーソル",   cps: 0.1,        baseCost: 15 },
+        grandma:  { name: "👵 おばあちゃん",cps: 1.0,        baseCost: 100 },
+        factory:  { name: "🏭 工場",       cps: 8.0,        baseCost: 1100 },
+        mine:     { name: "⛏️ 鉱山",       cps: 47.0,       baseCost: 12000 },
+        shipment: { name: "🚀 宇宙船",     cps: 260.0,      baseCost: 130000 },
+        lab:      { name: "🧪 錬金術ラボ", cps: 1400.0,     baseCost: 1400000 },
+        portal:   { name: "🌀 ポータル",   cps: 7800.0,     baseCost: 20000000 },
+        machine:  { name: "⏳ タイムマシン",cps: 44000.0,    baseCost: 330000000 },
+        condenser:{ name: "⚛️ 反物質凝縮器",cps: 260000.0,   baseCost: 4100000000 },
+        prism:    { name: "💎 プリズム",   cps: 1600000.0,  baseCost: 75000000000 },
+        temple:   { name: "🏛️ クッキー神殿",cps: 10000000.0, baseCost: 1000000000000 },
+        wizard:   { name: "🧙 魔法の塔",   cps: 65000000.0, baseCost: 14000000000000 },
+        finger:   { name: "🫵 創造主の指", cps: 430000000.0,baseCost: 170000000000000 },
+        bank:       { name: "🏦 クッキー銀行", cps: 2900000000,    baseCost: 2100000000000000 },
+        temple_2:   { name: "⛩️ 古代の発掘地", cps: 21000000000,   baseCost: 26000000000000000 },
+        ship_2:     { name: "🛸 銀河交易艦隊", cps: 150000000000,  baseCost: 310000000000000000 },
+        matrix:     { name: "🌐 クッキー網",   cps: 1100000000000, baseCost: 3800000000000000000 },
+        collider:   { name: "💥 粒子加速器",   cps: 8500000000000, baseCost: 49000000000000000000 },
+        javascript: { name: "💻 演算プログラム",cps: 68000000000000,baseCost: 650000000000000000000 },
+        universe:   { name: "🌌 平行世界界線", cps: 560000000000000,baseCost: 9200000000000000000000 },
+        dimension:  { name: "🌀 高次元転送機", cps: 4900000000000000,baseCost: 140000000000000000000000 },
+        singularity:{ name: "🕳️ 特異点発生装置",cps: 45000000000000000,baseCost: 2300000000000000000000000 },
+        void_core:  { name: "👁️ 虚空の核",     cps: 430000000000000000,baseCost: 42000000000000000000000000 },
+        god_mind:   { name: "🧠 神格意識ネット",cps: 4200000000000000000,baseCost: 890000000000000000000000000 },
+        infinity:   { name: "♾️ 無限の根源",   cps: 45000000000000000000,baseCost: 23000000000000000000000000000 }
+    };
+
+    const upgradesConfig = {
+        up_click_1: { icon: "🖱️", name: "強化マウス", cost: 100, desc: "クリックの威力が 2 倍になる", type: "click", value: 2 },
+        up_click_2: { icon: "🔩", name: "鉄のマウス", cost: 500, desc: "クリックの威力が 3 倍になる", type: "click", value: 3 },
+        up_click_3: { icon: "💎", name: "ダイヤマウス", cost: 10000, desc: "クリックの威力が 5 倍になる", type: "click", value: 5 },
+        up_click_4: { icon: "超", name: "量子マウス", cost: 500000000, desc: "クリックの威力が 10 倍になる", type: "click", value: 10 },
+        up_click_5: { icon: "🌌", name: "概念マウス", cost: 100000000000000, desc: "クリックの威力が 50 倍になる", type: "click", value: 50 },
+        up_cursor:  { icon: "プ", name: "強化プラスチック", cost: 300, desc: "カーソルの生産力が 2 倍になる", type: "cursor", value: 2 },
+        up_grandma: { icon: "🥮", name: "秘伝のレシピ", cost: 1000, desc: "おばあちゃんの生産力が 2 倍になる", type: "grandma", value: 2 },
+        up_factory: { icon: "⚡", name: "超高速コンベア", cost: 15000, desc: "工場の生産力が 2 倍になる", type: "factory", value: 2 },
+        up_mine:    { icon: "⛏️", name: "純結晶ツルハシ", cost: 150000, desc: "鉱山の生産力が 2 倍になる", type: "mine", value: 2 },
+        up_shipment:{ icon: "⚙️", name: "イオンエンジン", cost: 1600000, desc: "宇宙船の生産力が 2 倍になる", type: "shipment", value: 2 },
+        up_lab:     { icon: "🔮", name: "賢者の石", cost: 18000000, desc: "錬金術ラボの生産力が 2 倍になる", type: "lab", value: 2 },
+        up_portal:  { icon: "門", name: "異界の門の鍵", cost: 250000000, desc: "ポータルの生産力が 2 倍になる", type: "portal", value: 2 },
+        up_machine: { icon: "定", name: "因果律の固定器", cost: 4000000000, desc: "タイムマシンの生産力が 2 倍になる", type: "machine", value: 2 },
+        up_condenser:{icon: "鏡", name: "磁気束収束レンズ", cost: 50000000000, desc: "反物質凝縮器の生産力が 2 倍になる", type: "condenser", value: 2 },
+        up_prism:   { icon: "光", name: "全反射コート", cost: 900000000000, desc: "プリズムの生産力が 2 倍になる", type: "prism", value: 2 },
+        up_temple:  { icon: "祈", name: "黄金の供物", cost: 15000000000000, desc: "クッキー神殿の生産力が 3 倍になる", type: "temple", value: 3 },
+        up_wizard:  { icon: "巻", name: "禁忌の魔導書", cost: 200000000000000, desc: "魔法の塔の生産力が 3 倍になる", type: "wizard", value: 3 },
+        up_finger:  { icon: "掌", name: "万物の全能感", cost: 3000000000000000, desc: "創造主の指の生産力が 3 倍になる", type: "finger", value: 3 },
+        up_bank:    { icon: "金", name: "金利インフレ", cost: 45000000000000000, desc: "クッキー銀行の生産力が 3 倍になる", type: "bank", value: 3 },
+        up_temple_2:{ icon: "遺", name: "オーパーツ解析", cost: 550000000000000000, desc: "古代の発掘地の生産力が 3 倍になる", type: "temple_2", value: 3 },
+        up_ship_2:  { icon: "跳", name: "ワープドライブ", cost: 7000000000000000000, desc: "銀河交易艦隊の生産力が 3 倍になる", type: "ship_2", value: 3 },
+        up_matrix:  { icon: "網", name: "光速回線網", cost: 90000000000000000000, desc: "クッキー網の生産力が 4 倍になる", type: "matrix", value: 4 },
+        up_collider:{ icon: "衝", name: "高エネ衝突実験", cost: 1200000000000000000000, desc: "粒子加速器の生産力が 4 倍になる", type: "collider", value: 4 },
+        up_javascript:{icon:"編", name: "最適化コンパイル", cost: 15000000000000000000000, desc: "演算プログラムの生産力が 5 倍になる", type: "javascript", value: 5 },
+        up_universe:{ icon: "収", name: "世界線の統合", cost: 200000000000000000000000, desc: "平行世界界線の生産力が 5 倍になる", type: "universe", value: 5 },
+        up_dimension:{icon: "歪", name: "次元壁の崩壊", cost: 3500000000000000000000000, desc: "高次元転送機の生産力が 5 倍になる", type: "dimension", value: 5 },
+        up_singularity:{icon:"重", name: "事象の地平線", cost: 60000000000000000000000000, desc: "特異点発生装置の生産力が 5 倍になる", type: "singularity", value: 5 },
+        up_void_core:{icon: "無", name: "黒色物質抽出", cost: 990000000000000000000000000, desc: "虚空の核の生産力が 5 倍になる", type: "void_core", value: 5 },
+        up_god_mind:{ icon: "全", name: "オムニシアンス", cost: 15000000000000000000000000000, desc: "神格意識ネットの生産力が 6 倍になる", type: "god_mind", value: 6 },
+        up_infinity:{ icon: "終", name: "アブソリュート", cost: 999000000000000000000000000000, desc: "無限の根源の生産力が 10 倍になる", type: "infinity", value: 10 }
+    };
+
+    function initGame() {
+        const savedData = localStorage.getItem("cookie_clicker_save");
+        if (savedData) {
+            try {
+                gameState = JSON.parse(savedData);
+                cookies = gameState.cookies || 0;
+            } catch(e) { console.error("Data error"); }
+        }
+        for (let key in itemsConfig) { if (!gameState.items[key]) gameState.items[key] = 0; }
+        for (let key in upgradesConfig) { if (gameState.upgrades[key] === undefined) gameState.upgrades[key] = false; }
+        renderShop();
+        renderUpgrades();
+        updateUI();
+    }
+
+    function getCost(key) {
+        return Math.floor(itemsConfig[key].baseCost * Math.pow(1.15, gameState.items[key] || 0));
+    }
+
+    function calculateStats() {
+        let totalCps = 0;
+        function getMultiplier(type) {
+            let mult = 1;
+            for (let key in upgradesConfig) {
+                if (gameState.upgrades[key] && upgradesConfig[key].type === type) mult *= upgradesConfig[key].value;
+            }
+            return mult;
+        }
+        for (let key in itemsConfig) {
+            totalCps += (gameState.items[key] || 0) * itemsConfig[key].cps * getMultiplier(key);
+        }
+        if (isFever) totalCps *= 7;
+        let currentCpc = baseClickPower * getMultiplier("click");
+        if (isFever) currentCpc *= 7;
+        return { cps: totalCps, cpc: currentCpc };
+    }
+
+    function updateUI() {
+        const stats = calculateStats();
+        document.getElementById("cookies").innerText = Math.floor(cookies).toLocaleString();
+        document.getElementById("cps").innerText = stats.cps.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1});
+        document.getElementById("cpc").innerText = stats.cpc.toLocaleString();
+
+        for (let key in itemsConfig) {
+            const btn = document.getElementById("item-" + key);
+            if (btn) {
+                const cost = getCost(key);
+                if (cookies >= cost) btn.classList.remove("disabled"); else btn.classList.add("disabled");
+                document.getElementById("cost-" + key).innerText = cost.toLocaleString();
+                document.getElementById("count-" + key).innerText = gameState.items[key];
+            }
+        }
+        for (let key in upgradesConfig) {
+            const icon = document.getElementById("up-" + key);
+            if (icon) {
+                if (gameState.upgrades[key]) icon.remove();
+                else if (cookies >= upgradesConfig[key].cost) icon.classList.remove("disabled");
+                else icon.classList.add("disabled");
+            }
+        }
+    }
+
+    function renderShop() {
+        const container = document.getElementById("shop-container");
+        container.innerHTML = "";
+        for (let key in itemsConfig) {
+            const div = document.createElement("div");
+            div.className = "shop-item disabled"; div.id = "item-" + key;
+            div.onclick = () => buyItem(key);
+            div.innerHTML = `<div class="item-info"><div>${itemsConfig[key].name}</div><span>単体 CPS: +${itemsConfig[key].cps.toLocaleString()}</span></div><div style="display: flex; align-items: center;"><div class="item-cost"><span id="cost-${key}">${itemsConfig[key].baseCost}</span> 枚</div><div class="item-count" id="count-${key}">0</div></div>`;
+            container.appendChild(div);
+        }
+    }
+
+    function renderUpgrades() {
+        const container = document.getElementById("upgrade-container");
+        container.innerHTML = "";
+        for (let key in upgradesConfig) {
+            if (gameState.upgrades[key]) continue;
+            const div = document.createElement("div");
+            div.className = "upgrade-icon disabled"; div.id = "up-" + key;
+            div.innerText = upgradesConfig[key].icon;
+            div.onclick = (e) => { e.stopPropagation(); buyUpgrade(key); };
+            div.innerHTML += `<div class="tooltip"><strong>${upgradesConfig[key].name}</strong><br>コスト: ${upgradesConfig[key].cost.toLocaleString()} 枚<br><span style="color: #ffb84d;">${upgradesConfig[key].desc}</span></div>`;
+            container.appendChild(div);
+        }
+    }
+
+    function clickCookie() {
+        cookies += calculateStats().cpc;
+        const el = document.getElementById("cookie");
+        el.classList.add("active"); setTimeout(() => el.classList.remove("active"), 50);
+        updateUI();
+    }
+
+    function buyItem(key) {
+        const cost = getCost(key);
+        if (cookies >= cost) { cookies -= cost; gameState.items[key]++; saveGame(); updateUI(); }
+    }
+
+    function buyUpgrade(key) {
+        if (!gameState.upgrades[key] && cookies >= upgradesConfig[key].cost) {
+            cookies -= upgradesConfig[key].cost; gameState.upgrades[key] = true;
+            saveGame(); renderUpgrades(); updateUI();
+        }
+    }
+
+    function spawnGoldenCookie() {
+        const gc = document.getElementById("golden-cookie");
+        const panel = document.getElementById("left-panel");
+        gc.style.left = Math.random() * (panel.clientWidth - 60) + "px";
+        gc.style.top = Math.random() * (panel.clientHeight - 60) + "px";
+        gc.style.display = "block";
+        setTimeout(() => { gc.style.display = "none"; }, 10000);
+    }
+
+    function clickGoldenCookie() {
+        document.getElementById("golden-cookie").style.display = "none";
+        if (Math.random() < 0.5) {
+            isFever = true; feverTimeLeft = 15;
+            document.body.classList.add("fever-mode");
+            document.getElementById("fever-overlay").style.display = "block";
+            document.getElementById("fever-timer").innerText = feverTimeLeft;
+        } else {
+            const bonus = Math.max(100, calculateStats().cps * 150); cookies += bonus;
+            alert(`🌟 ゴールデンクッキー！ \nクッキー ${Math.floor(bonus).toLocaleString()} 枚を獲得！`);
+        }
+        updateUI();
+    }
+
+    function saveGame() { gameState.cookies = cookies; localStorage.setItem("cookie_clicker_save", JSON.stringify(gameState)); }
+
+    function resetGame() {
+        if (confirm("データを完全に消去しますか？")) {
+            localStorage.removeItem("cookie_clicker_save");
+            cookies = 0; isFever = false; feverTimeLeft = 0;
+            document.body.classList.remove("fever-mode");
+            document.getElementById("fever-overlay").style.display = "none";
+            gameState = { cookies: 0, items: {}, upgrades: {} };
+            initGame();
+        }
+    }
+
+    window.addEventListener("keydown", (e) => { if (e.code === "Space") { e.preventDefault(); clickCookie(); } });
+    setInterval(() => { cookies += calculateStats().cps / 20; updateUI(); }, 50);
+    setInterval(() => {
+        if (isFever) {
+            feverTimeLeft--;
+            if (feverTimeLeft <= 0) { isFever = false; document.body.classList.remove("fever-mode"); document.getElementById("fever-overlay").style.display = "none"; }
+            else { document.getElementById("fever-timer").innerText = feverTimeLeft; }
+            updateUI();
+        }
+    }, 1000);
+    setInterval(saveGame, 3000);
+    function loopGoldenCookie() { setTimeout(() => { spawnGoldenCookie(); loopGoldenCookie(); }, (Math.random() * 40 + 30) * 1000); }
+
+    initGame();
+    loopGoldenCookie();
+</script>
+
+</body>
+</html>
